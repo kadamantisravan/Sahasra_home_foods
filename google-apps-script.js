@@ -13,7 +13,19 @@
 
 function doPost(e) {
   try {
+    // Check if this is a valid POST request with data
+    if (!e || !e.postData || !e.postData.contents) {
+      console.error('Invalid request: No postData found');
+      return ContentService
+        .createTextOutput(JSON.stringify({
+          success: false, 
+          error: 'Invalid request format. This function should be called via HTTP POST with JSON data.'
+        }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     // Parse the incoming data
+    console.log('Received POST data:', e.postData.contents);
     const data = JSON.parse(e.postData.contents);
     
     // Get or create the spreadsheet
@@ -118,6 +130,18 @@ function doPost(e) {
   }
 }
 
+// Handle GET requests (for testing and verification)
+function doGet(e) {
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      message: 'Sahasra Home-Foods Order System is running!',
+      timestamp: new Date().toISOString(),
+      status: 'active',
+      instructions: 'This endpoint accepts POST requests with order data.'
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function getOrCreateSpreadsheet() {
   const spreadsheetName = 'Sahasra Cart Orders';
   
@@ -139,27 +163,37 @@ function getOrCreateSpreadsheet() {
 }
 
 function sendEmailNotification(orderData) {
-  // IMPORTANT: Replace with your actual email address
-  const businessEmail = 'saratsony@gmail.com';
-  
-  const subject = `🛒 New Cart Order: ${orderData.orderRef} - Sahasra Home-Foods`;
-  
-  // Format items list for email
-  let itemsDetails = '';
-  let itemCount = 0;
-  
-  if (orderData.items && Array.isArray(orderData.items)) {
-    itemsDetails = orderData.items.map(item => {
-      itemCount += item.quantity;
-      return `• ${item.name}\n  Quantity: ${item.quantity}\n  Price: ₹${item.price} each\n  Subtotal: ₹${item.price * item.quantity}`;
-    }).join('\n\n');
-  } else {
-    // Fallback for single item orders
-    itemsDetails = `• ${orderData.itemName || 'N/A'}\n  Quantity: ${orderData.quantity || 1}\n  Price: ₹${orderData.itemPrice || 0}`;
-    itemCount = orderData.quantity || 1;
-  }
-  
-  const body = `
+  try {
+    // IMPORTANT: Replace with your actual email address
+    const businessEmail = 'saratsony@gmail.com';
+    
+    // Log email attempt
+    console.log('Attempting to send email to:', businessEmail);
+    console.log('Order data received:', JSON.stringify(orderData, null, 2));
+    
+    // Validate email address format
+    if (!businessEmail || !businessEmail.includes('@') || !businessEmail.includes('.')) {
+      throw new Error('Invalid business email address format');
+    }
+    
+    const subject = `🛒 New Cart Order: ${orderData.orderRef} - Sahasra Home-Foods`;
+    
+    // Format items list for email
+    let itemsDetails = '';
+    let itemCount = 0;
+    
+    if (orderData.items && Array.isArray(orderData.items)) {
+      itemsDetails = orderData.items.map(item => {
+        itemCount += item.quantity;
+        return `• ${item.name}\n  Quantity: ${item.quantity}\n  Price: ₹${item.price} each\n  Subtotal: ₹${item.price * item.quantity}`;
+      }).join('\n\n');
+    } else {
+      // Fallback for single item orders
+      itemsDetails = `• ${orderData.itemName || 'N/A'}\n  Quantity: ${orderData.quantity || 1}\n  Price: ₹${orderData.itemPrice || 0}`;
+      itemCount = orderData.quantity || 1;
+    }
+    
+    const body = `
 🍰 NEW ORDER RECEIVED - Sahasra Home-Foods
 
 ORDER DETAILS:
@@ -199,20 +233,58 @@ ACTION REQUIRED:
 
 Best regards,
 Sahasra Home-Foods Automated Order System
-  `;
-  
-  try {
-    MailApp.sendEmail(businessEmail, subject, body);
-    console.log('Email notification sent successfully');
+    `;
+    
+    // Check Gmail quota and send email
+    const quota = MailApp.getRemainingDailyQuota();
+    console.log('Remaining email quota:', quota);
+    
+    if (quota <= 0) {
+      throw new Error('Daily email quota exceeded');
+    }
+    
+    // Send the email
+    MailApp.sendEmail({
+      to: businessEmail,
+      subject: subject,
+      body: body,
+      name: 'Sahasra Home-Foods Order System'
+    });
+    
+    console.log('✅ Email notification sent successfully to:', businessEmail);
+    console.log('Subject:', subject);
+    
+    return { success: true, message: 'Email sent successfully' };
+    
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('❌ Error sending email:', error.toString());
+    console.error('Error details:', error);
+    
+    // Try to log the error to the spreadsheet for debugging
+    try {
+      const spreadsheet = getOrCreateSpreadsheet();
+      const errorSheet = getOrCreateErrorLog(spreadsheet);
+      errorSheet.appendRow([
+        new Date(),
+        'Email Error',
+        error.toString(),
+        JSON.stringify(orderData),
+        'saratsony@gmail.com'
+      ]);
+    } catch (logError) {
+      console.error('Failed to log error to spreadsheet:', logError);
+    }
+    
+    return { success: false, error: error.toString() };
   }
 }
 
 // Test function to verify cart setup
 function testCartSetup() {
+  console.log('🧪 Testing cart setup and order processing...');
+  
   const testData = {
-    orderRef: 'TEST-CART-001',
+    orderRef: 'TEST-CART-' + Date.now(),
     timestamp: new Date().toISOString(),
     items: [
       { name: 'Test Sweet 1', price: 200, quantity: 2 },
@@ -229,17 +301,92 @@ function testCartSetup() {
     status: 'Test'
   };
   
+  console.log('Test order data:', JSON.stringify(testData, null, 2));
+  
   const spreadsheet = getOrCreateSpreadsheet();
   console.log('Test spreadsheet created/found:', spreadsheet.getName());
   console.log('Spreadsheet URL:', spreadsheet.getUrl());
   
-  // Test the doPost function
+  // Test the doPost function with proper event simulation
   const testEvent = {
     postData: {
       contents: JSON.stringify(testData)
     }
   };
   
+  console.log('Calling doPost with test event...');
   const result = doPost(testEvent);
-  console.log('Test result:', result.getContent());
+  const resultContent = result.getContent();
+  
+  console.log('Test result:', resultContent);
+  
+  try {
+    const parsedResult = JSON.parse(resultContent);
+    if (parsedResult.success) {
+      console.log('✅ Cart setup test PASSED');
+      console.log('Order reference:', parsedResult.orderRef);
+      console.log('Check your spreadsheet and email for the test order');
+    } else {
+      console.log('❌ Cart setup test FAILED:', parsedResult.error);
+    }
+  } catch (e) {
+    console.log('❌ Error parsing test result:', e);
+  }
+  
+  return resultContent;
+}
+
+// Helper function to create or get error log sheet
+function getOrCreateErrorLog(spreadsheet) {
+  let errorSheet;
+  try {
+    errorSheet = spreadsheet.getSheetByName('Error Log');
+  } catch (e) {
+    errorSheet = null;
+  }
+  
+  if (!errorSheet) {
+    errorSheet = spreadsheet.insertSheet('Error Log');
+    const headers = ['Timestamp', 'Error Type', 'Error Message', 'Order Data', 'Email Address'];
+    errorSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // Format headers
+    const headerRange = errorSheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#ff4444');
+    headerRange.setFontColor('white');
+    headerRange.setFontWeight('bold');
+  }
+  
+  return errorSheet;
+}
+
+// Simple email test function
+function testEmailSending() {
+  console.log('🧪 Testing email functionality...');
+  
+  const testOrderData = {
+    orderRef: 'TEST-EMAIL-' + Date.now(),
+    timestamp: new Date().toISOString(),
+    items: [
+      { name: 'Test Sweet', price: 100, quantity: 1 }
+    ],
+    cartTotal: 100,
+    deliveryCharges: 50,
+    grandTotal: 150,
+    customerName: 'Test Customer',
+    customerPhone: '9876543210',
+    customerEmail: 'test@example.com',
+    customerAddress: 'Test Address',
+    specialInstructions: 'This is a test order for email verification'
+  };
+  
+  const result = sendEmailNotification(testOrderData);
+  
+  if (result.success) {
+    console.log('✅ Email test PASSED - Check saratsony@gmail.com for test email');
+  } else {
+    console.log('❌ Email test FAILED:', result.error);
+  }
+  
+  return result;
 }
