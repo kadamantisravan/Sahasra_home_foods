@@ -595,7 +595,7 @@ function generateOrderRef() {
 // Submit Order to Google Sheets
 async function submitOrderToSheets(orderData) {
     // Google Apps Script Web App URL - Replace with your actual URL from Step 1C
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzFCtQ68jkvJOYrDWvjqbtZVaEnug5p-bXWV-2EELeMDzGYVGS1ry1JubjKJnEguoNLCA/exec';
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxuaXdkVPABRta9FrFR3QinZhdkrxiIwkrtg-3mLXisxUygH8XaWhWcWoHApO8_9lBVCA/exec';
     
     try {
         const response = await fetch(GOOGLE_SCRIPT_URL, {

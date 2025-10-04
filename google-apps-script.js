@@ -132,7 +132,7 @@ function getOrCreateSpreadsheet() {
     const spreadsheet = SpreadsheetApp.create(spreadsheetName);
     
     // Share with the business owner (replace with actual email)
-    // spreadsheet.addEditor('your-email@gmail.com');
+    // spreadsheet.addEditor('saratsony@gmail.com');
     
     return spreadsheet;
   }
@@ -140,7 +140,7 @@ function getOrCreateSpreadsheet() {
 
 function sendEmailNotification(orderData) {
   // IMPORTANT: Replace with your actual email address
-  const businessEmail = 'your-email@gmail.com';
+  const businessEmail = 'saratsony@gmail.com';
   
   const subject = `🛒 New Cart Order: ${orderData.orderRef} - Sahasra Home-Foods`;
   
